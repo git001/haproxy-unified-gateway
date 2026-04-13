@@ -51,6 +51,7 @@ type Frontend interface {
 	FrontendsGet() (models.Frontends, error)
 	FrontendGet(frontendName string) (models.Frontend, error)
 	FrontendEdit(frontend models.Frontend) error
+	FilterReplaceAll(parentType parser.Section, name string, filters models.Filters) error
 }
 
 type Bind interface {
