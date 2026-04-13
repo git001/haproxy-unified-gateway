@@ -1,0 +1,5 @@
+apiVersion: gate.v3.haproxy.org/v3
+kind: Frontend
+metadata:
+  name: fe-filter
+spec: {}
