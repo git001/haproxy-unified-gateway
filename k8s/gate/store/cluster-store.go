@@ -45,6 +45,7 @@ type ClusterStore struct {
 	BackendCRs     map[types.NamespacedName]*v3.Backend
 	GlobalCRs      map[types.NamespacedName]*v3.Global
 	DefaultsCRs    map[types.NamespacedName]*v3.Defaults
+	FrontendCRs    map[types.NamespacedName]*v3.Frontend
 	HugConfs       map[types.NamespacedName]*v3.HugConf
 	EndpointSlices map[types.NamespacedName]*discoveryV1.EndpointSlice
 	Updates        ClusterUpdates
@@ -89,6 +90,7 @@ func NewClusterStoreUpdaterImpl(
 				extractGVK(&v3.Backend{}):                      newObjectStoreImpl(clusterStore.BackendCRs, clusterStore.Updates.BackendCRs, logger),
 				extractGVK(&v3.Global{}):                       newObjectStoreImpl(clusterStore.GlobalCRs, clusterStore.Updates.GlobalCRs, logger),
 				extractGVK(&v3.Defaults{}):                     newObjectStoreImpl(clusterStore.DefaultsCRs, clusterStore.Updates.DefaultsCRs, logger),
+				extractGVK(&v3.Frontend{}):                     newObjectStoreImpl(clusterStore.FrontendCRs, clusterStore.Updates.FrontendCRs, logger),
 				extractGVK(&v3.HugConf{}):                      newObjectStoreImpl(clusterStore.HugConfs, clusterStore.Updates.HugConfs, logger),
 				extractGVK(&discoveryV1.EndpointSlice{}):       newObjectStoreImpl(clusterStore.EndpointSlices, clusterStore.Updates.EndpointSlices, logger),
 			},
