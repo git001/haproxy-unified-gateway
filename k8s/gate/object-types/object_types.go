@@ -30,6 +30,7 @@ var (
 	ObjectTypeBackend      = &v3.Backend{}
 	ObjectTypeGlobal       = &v3.Global{}
 	ObjectTypeDefaults     = &v3.Defaults{}
+	ObjectTypeFrontend     = &v3.Frontend{}
 	ObjectTypeTLSRoute     = &gatewayv1alpha2.TLSRoute{}
 )
 
