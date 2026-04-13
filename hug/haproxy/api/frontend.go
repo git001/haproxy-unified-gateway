@@ -72,6 +72,12 @@ func (c *clientNative) FrontendCreate(frontend models.Frontend) error {
 		return err
 	}
 
+	// Filters
+	err = c.FilterReplaceAll(parser.Frontends, frontend.Name, frontend.FilterList)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -180,6 +186,12 @@ func (c *clientNative) FrontendEdit(frontend models.Frontend) error {
 
 	// Use backend rules
 	err = c.UseBackendReplaceAll(frontend.Name, frontend.BackendSwitchingRuleList)
+	if err != nil {
+		return err
+	}
+
+	// Filters
+	err = c.FilterReplaceAll(parser.Frontends, frontend.Name, frontend.FilterList)
 	if err != nil {
 		return err
 	}
