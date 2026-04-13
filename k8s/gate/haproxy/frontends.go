@@ -311,6 +311,7 @@ func (b *HaproxyConfMgrImpl) newFrontend(vListenerName string, vListener *tree.V
 		TCPRequestRuleList:       tcpRules,
 		HTTPRequestRuleList:      httpRules,
 		BackendSwitchingRuleList: backendSwitchingRules,
+		FilterList:               vListener.FilterList,
 	}
 
 	// Set other frontend properties based on the listener
