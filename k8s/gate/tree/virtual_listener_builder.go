@@ -19,9 +19,11 @@ import (
 	"log/slog"
 	"slices"
 
+	v3 "github.com/haproxytech/haproxy-unified-gateway/api/gate/v3"
 	"github.com/haproxytech/haproxy-unified-gateway/k8s/gate/logging"
 	"github.com/haproxytech/haproxy-unified-gateway/k8s/gate/protocols"
 	"github.com/haproxytech/haproxy-unified-gateway/k8s/gate/store"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var _ Builder = &VirtualListenerBuilderImpl{}
@@ -105,6 +107,42 @@ func (b *VirtualListenerBuilderImpl) ComputeTreeUpdates() {
 		slices.SortStableFunc(vl.Listeners, func(a, b *Listener) int {
 			return cmp.Compare(a.K8sResource.Name, b.K8sResource.Name)
 		})
+	}
+
+	// Populate FilterList from matching Frontend CRs
+	for _, vl := range b.GateTree.VirtualListeners {
+		// Collect unique Gateway owner keys for this VirtualListener
+		gatewayKeys := make(map[types.NamespacedName]struct{}, len(vl.Listeners))
+		for _, l := range vl.Listeners {
+			gatewayKeys[l.Owner] = struct{}{}
+		}
+
+		// Collect matching Frontend CRs
+		var matchingCRs []*v3.Frontend
+		for _, fe := range b.ClusterStore.FrontendCRs {
+			if fe.Spec.ParentRef == nil {
+				matchingCRs = append(matchingCRs, fe)
+				continue
+			}
+			ns := fe.Spec.ParentRef.Namespace
+			if ns == "" {
+				ns = fe.Namespace
+			}
+			key := types.NamespacedName{Name: fe.Spec.ParentRef.Name, Namespace: ns}
+			if _, ok := gatewayKeys[key]; ok {
+				matchingCRs = append(matchingCRs, fe)
+			}
+		}
+
+		// Sort by CR name for deterministic ordering
+		slices.SortStableFunc(matchingCRs, func(a, b *v3.Frontend) int {
+			return cmp.Compare(a.Name, b.Name)
+		})
+
+		// Merge FilterLists
+		for _, fe := range matchingCRs {
+			vl.FilterList = append(vl.FilterList, fe.Spec.FilterList...)
+		}
 	}
 
 	// Update TreeStatus by comparing with PreviousVirtualListeners
