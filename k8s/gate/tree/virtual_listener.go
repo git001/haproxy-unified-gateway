@@ -21,6 +21,7 @@ import (
 	"strconv"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/haproxytech/client-native/v6/models"
 	"github.com/haproxytech/haproxy-unified-gateway/k8s/gate/conditions/generic"
 	"github.com/haproxytech/haproxy-unified-gateway/k8s/gate/protocols"
 	"github.com/haproxytech/haproxy-unified-gateway/k8s/gate/store"
@@ -32,9 +33,10 @@ type VirtualListener struct {
 	ProtocolCategory protocols.ProtocolCategory
 	Name             string
 	// Status
-	Status    store.Status
-	Listeners []*Listener
-	Port      v1.PortNumber
+	Status     store.Status
+	Listeners  []*Listener
+	FilterList models.Filters `json:"filter_list,omitempty"`
+	Port       v1.PortNumber
 }
 
 func (vl *VirtualListener) name() string {
@@ -106,6 +108,11 @@ func (vl *VirtualListener) Equal(other *VirtualListener) bool {
 		if !cmp.Equal(vl.Listeners[i].K8sResource, other.Listeners[i].K8sResource) {
 			return false
 		}
+	}
+
+	// Compare FilterList
+	if !vl.FilterList.Equal(other.FilterList) {
+		return false
 	}
 
 	// if condition Programmed is Unknown,
