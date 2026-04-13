@@ -141,6 +141,13 @@ func (c *clientNative) FrontendGet(frontendName string) (models.Frontend, error)
 		}
 	}
 
+	// Filters
+	_, filters, err := configuration.GetFilters(string(parser.Frontends), frontend.Name, c.activeTransaction)
+	if err != nil {
+		return models.Frontend{}, err
+	}
+	frontend.FilterList = filters
+
 	return *frontend, err
 }
 
