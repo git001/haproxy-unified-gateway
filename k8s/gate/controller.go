@@ -171,6 +171,7 @@ func Add(
 		BackendCRs:     make(map[types.NamespacedName]*v3.Backend),
 		GlobalCRs:      make(map[types.NamespacedName]*v3.Global),
 		DefaultsCRs:    make(map[types.NamespacedName]*v3.Defaults),
+		FrontendCRs:    make(map[types.NamespacedName]*v3.Frontend),
 		Updates:        store.NewClusterUpdates(),
 	}
 
@@ -329,6 +330,15 @@ func registerControllers(ctx context.Context, extractGVK utilsk8s.ExtractGVK, cf
 							k8spredicate.NewPredicateFuncs(func(obj ctrlruntimeclient.Object) bool {
 								return obj.GetLabels()[constant.HugServiceLabelKey] == constant.HugServiceLabelVal
 							}),
+						),
+					},
+					// Watch Frontend CRs
+					{
+						watchSource: objtypes.ObjectTypeFrontend,
+						enqueueFunc: enqueueGatewayForFrontendCR,
+						predicate: k8spredicate.And(
+							k8spredicate.ResourceVersionChangedPredicate{},
+							predicate.NewNamespacePredicate(cfg.Namespaces),
 						),
 					},
 				},
@@ -490,6 +500,18 @@ func registerControllers(ctx context.Context, extractGVK utilsk8s.ExtractGVK, cf
 		{
 			name:       "BackendCR",
 			objectType: objtypes.ObjectTypeBackend,
+			options: []Option{
+				WithK8sPredicate(
+					k8spredicate.And(
+						k8spredicate.ResourceVersionChangedPredicate{},
+						predicate.NewNamespacePredicate(cfg.Namespaces),
+					),
+				),
+			},
+		},
+		{
+			name:       "FrontendCR",
+			objectType: objtypes.ObjectTypeFrontend,
 			options: []Option{
 				WithK8sPredicate(
 					k8spredicate.And(
