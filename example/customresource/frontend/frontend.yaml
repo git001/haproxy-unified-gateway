@@ -1,0 +1,15 @@
+apiVersion: gate.v3.haproxy.org/v3
+kind: Frontend
+metadata:
+  name: rate-limiting
+  namespace: haproxy-unified-gateway
+spec:
+  # parentRef targets the Gateway whose frontends should receive the filter.
+  # Omit parentRef to apply the FilterList to all HUG-managed frontends.
+  parentRef:
+    name: hug-gateway
+    namespace: haproxy-unified-gateway
+  filter_list:
+    - type: spoe
+      spoe_config: /etc/haproxy/spoe/rate-limit.conf
+      spoe_engine: rate-limit
