@@ -62,6 +62,7 @@ type ClusterUpdates struct {
 	BackendCRs     map[types.NamespacedName]Update[*v3.Backend]
 	GlobalCRs      map[types.NamespacedName]Update[*v3.Global]
 	DefaultsCRs    map[types.NamespacedName]Update[*v3.Defaults]
+	FrontendCRs    map[types.NamespacedName]Update[*v3.Frontend]
 	HugConfs       map[types.NamespacedName]Update[*v3.HugConf]
 	EndpointSlices map[types.NamespacedName]Update[*discoveryV1.EndpointSlice]
 }
@@ -81,6 +82,7 @@ func NewClusterUpdates() ClusterUpdates {
 		BackendCRs:     make(map[types.NamespacedName]Update[*v3.Backend]),
 		GlobalCRs:      make(map[types.NamespacedName]Update[*v3.Global]),
 		DefaultsCRs:    make(map[types.NamespacedName]Update[*v3.Defaults]),
+		FrontendCRs:    make(map[types.NamespacedName]Update[*v3.Frontend]),
 		HugConfs:       make(map[types.NamespacedName]Update[*v3.HugConf]),
 		EndpointSlices: make(map[types.NamespacedName]Update[*discoveryV1.EndpointSlice]),
 	}
