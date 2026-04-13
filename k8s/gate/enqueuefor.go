@@ -409,6 +409,51 @@ func enqueueTLSRouteForGateway(ctrlclient client.Client, extractGVK utilsk8s.Ext
 	}
 }
 
+// enqueueGatewayForFrontendCR returns a handler.EventHandler that enqueues all Gateways
+// related to an observed Frontend CR.
+// If spec.parentRef is nil, all Gateways are enqueued.
+// If spec.parentRef is set, only the referenced Gateway is enqueued.
+func enqueueGatewayForFrontendCR(ctrlclient client.Client, _ utilsk8s.ExtractGVK) handler.MapFunc {
+	return func(ctx context.Context, o client.Object) []reconcile.Request {
+		fe, ok := o.(*v3.Frontend)
+		if !ok {
+			return []reconcile.Request{}
+		}
+
+		gwList := &gatewayv1.GatewayList{}
+		if err := ctrlclient.List(ctx, gwList); err != nil {
+			return []reconcile.Request{}
+		}
+
+		// nil parentRef → enqueue all Gateways
+		if fe.Spec.ParentRef == nil {
+			requests := make([]reconcile.Request, 0, len(gwList.Items))
+			for _, gw := range gwList.Items {
+				requests = append(requests, reconcile.Request{NamespacedName: types.NamespacedName{
+					Namespace: gw.GetNamespace(),
+					Name:      gw.GetName(),
+				}})
+			}
+			return requests
+		}
+
+		// parentRef set → enqueue only the referenced Gateway
+		ns := fe.Spec.ParentRef.Namespace
+		if ns == "" {
+			ns = fe.GetNamespace()
+		}
+		for _, gw := range gwList.Items {
+			if gw.Name == fe.Spec.ParentRef.Name && gw.Namespace == ns {
+				return []reconcile.Request{{NamespacedName: types.NamespacedName{
+					Namespace: gw.GetNamespace(),
+					Name:      gw.GetName(),
+				}}}
+			}
+		}
+		return []reconcile.Request{}
+	}
+}
+
 // enqueueHugConfForDefaultsCR returns a handler.EventHandler that enqueues all HugConf
 // objects whose DefaultsRef points to the observed Defaults CR.
 func enqueueHugConfForDefaultsCR(ctrlclient client.Client, extractGVK utilsk8s.ExtractGVK) handler.MapFunc {
