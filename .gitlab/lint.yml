@@ -97,6 +97,48 @@ commit-policy:
       - junit-report.xml
     reports:
       junit: junit-report.xml
+check-dependencies:
+  stage: lint
+  allow_failure: true
+  needs: []
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  image:
+    name: $HAPROXY_REGISTRY_GO/golang:latest-alpine
+    entrypoint: [""]
+  tags:
+    - go
+  script:
+    - |
+      git fetch origin ${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}
+      # skip check if all go.mod changes are from Gopher Bot
+      BOT_COMMITS=$(git log --author="noreply-gopher@haproxy.com" --format='%H' origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}..HEAD -- go.mod || true)
+      ALL_COMMITS=$(git log --format='%H' origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}..HEAD -- go.mod || true)
+      if [ -n "$ALL_COMMITS" ] && [ "$BOT_COMMITS" = "$ALL_COMMITS" ]; then
+        echo "All go.mod changes are from Gopher Bot, skipping."
+        junit-report add --status=ok --file="go.mod" --message="go.mod changes from Gopher Bot, skipped" --description="go.mod dependency check skipped"
+        exit 0
+      fi
+      NEW_DEPS=$(git diff origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}...HEAD -- go.mod \
+        | grep -E '^\+\s' \
+        | grep -v '^\+\+\+' \
+        | grep -v '^\+\s*\/\/' \
+        || true)
+      if [ -n "$NEW_DEPS" ]; then
+        echo "New dependencies detected in go.mod:"
+        echo "$NEW_DEPS"
+        junit-report add --status=failed --file="go.mod" --message="new dependencies added to go.mod" --description="$(printf "The following dependencies were added:\n\n%s" "$NEW_DEPS")"
+        exit 1
+      else
+        echo "No new dependencies added to go.mod."
+        junit-report add --status=ok --file="go.mod" --message="no new dependencies added to go.mod" --description="go.mod dependency check passed"
+      fi
+  artifacts:
+    when: on_failure
+    paths:
+      - junit-report.xml
+    reports:
+      junit: junit-report.xml
 check-committer:
   stage: lint
   allow_failure: true
@@ -125,6 +167,8 @@ check-committer:
         esac
       done
       CO_AUTHORED=""
+      ASSISTED=""
+      SIGNED_OFF=""
       for COMMIT in $(git log --format='%H' origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}..HEAD); do
         BODY=$(git log -1 --format='%b' "$COMMIT")
         MSG=$(git log -1 --format='%s' "$COMMIT")
@@ -133,6 +177,18 @@ check-committer:
           SHORT=$(echo "$COMMIT" | cut -c1-8)
           CO_AUTHORED="${CO_AUTHORED}${SHORT} ${MSG}\n$(echo "$MATCHED" | sed 's/^/  /')\n"
           junit-report add --status=failed --file="co-authored-by" --message="$MSG" --description="$(printf "commit contains Co-authored-by trailer\n\n%s\n%s" "$MSG" "$MATCHED")"
+        fi
+        MATCHED=$(echo "$BODY" | grep -i 'Assisted-by' || true)
+        if [ -n "$MATCHED" ]; then
+          SHORT=$(echo "$COMMIT" | cut -c1-8)
+          ASSISTED="${ASSISTED}${SHORT} ${MSG}\n$(echo "$MATCHED" | sed 's/^/  /')\n"
+          junit-report add --status=failed --file="assisted-by" --message="$MSG" --description="$(printf "commit contains Assisted-by trailer\n\n%s\n%s" "$MSG" "$MATCHED")"
+        fi
+        MATCHED=$(echo "$BODY" | grep -i 'Signed-off-by' || true)
+        if [ -n "$MATCHED" ]; then
+          SHORT=$(echo "$COMMIT" | cut -c1-8)
+          SIGNED_OFF="${SIGNED_OFF}${SHORT} ${MSG}\n$(echo "$MATCHED" | sed 's/^/  /')\n"
+          junit-report add --status=failed --file="signed-off-by" --message="$MSG" --description="$(printf "commit contains Signed-off-by trailer\n\n%s\n%s" "$MSG" "$MATCHED")"
         fi
       done
       FAILED=""
@@ -151,6 +207,22 @@ check-committer:
       else
         echo "No commits contain Co-authored-by."
         junit-report add --status=ok --file=co-authored-by --description="no co-authored-by found" --message="No commits contain Co-authored-by."
+      fi
+      if [ -n "$ASSISTED" ]; then
+        echo "The following commits contain Assisted-by:"
+        printf "$ASSISTED"
+        FAILED=1
+      else
+        echo "No commits contain Assisted-by."
+        junit-report add --status=ok --file=assisted-by --description="no assisted-by found" --message="No commits contain Assisted-by."
+      fi
+      if [ -n "$SIGNED_OFF" ]; then
+        echo "The following commits contain Signed-off-by:"
+        printf "$SIGNED_OFF"
+        FAILED=1
+      else
+        echo "No commits contain Signed-off-by."
+        junit-report add --status=ok --file=signed-off-by --description="no signed-off-by found" --message="No commits contain Signed-off-by."
       fi
       if [ -n "$FAILED" ]; then
         exit 1
