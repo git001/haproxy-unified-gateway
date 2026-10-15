@@ -165,6 +165,7 @@ func (s *HTTPRouteTestSuite) Test_HTTPRoute_Backend_1_route_redirect() {
 	backendsExpectationsPath := path.Join(expectationsPath, "backends")
 	expectedBackends := []string{
 		"hug_redirect_0a19443037896884091efc4f20923e4d",
+		"hug_redirect_9769de3253e6068ceb3c78cf92e3305c",
 	}
 	s.ExpectBackends(s.Test().Ctx, backendsExpectationsPath, expectedBackends)
 

@@ -155,13 +155,35 @@ func TestRequestRedirectRules(t *testing.T) {
 			wantValue: "https",
 		},
 		{
-			name: "hostname redirect",
+			name: "hostname redirect keeps the request scheme",
 			filter: gatewayv1.HTTPRequestRedirectFilter{
 				Hostname: (*gatewayv1.PreciseHostname)(new("new.example.com")),
 			},
 			wantLen:   1,
 			wantType:  "location",
-			wantValue: "new.example.com%[path]",
+			wantValue: "%[ssl_fc,iif(https,http)]://new.example.com%[path]",
+		},
+		{
+			name: "port-only redirect keeps the request scheme and host",
+			filter: gatewayv1.HTTPRequestRedirectFilter{
+				Port: new(gatewayv1.PortNumber(8083)),
+			},
+			wantLen:   1,
+			wantType:  "location",
+			wantValue: "%[ssl_fc,iif(https,http)]://%[req.hdr(host),host_only]:8083%[path]",
+		},
+		{
+			name: "explicit scheme and path replacement",
+			filter: gatewayv1.HTTPRequestRedirectFilter{
+				Scheme: new("https"),
+				Path: &gatewayv1.HTTPPathModifier{
+					Type:            gatewayv1.FullPathHTTPPathModifier,
+					ReplaceFullPath: new("/new-path"),
+				},
+			},
+			wantLen:   1,
+			wantType:  "location",
+			wantValue: "https://%[req.hdr(host),host_only]/new-path",
 		},
 		{
 			name: "full path replacement",

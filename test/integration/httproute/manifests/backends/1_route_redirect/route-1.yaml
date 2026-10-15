@@ -18,3 +18,12 @@ spec:
       requestRedirect:
         scheme: https
         statusCode: 301
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /route2
+    filters:
+    - type: RequestRedirect
+      requestRedirect:
+        hostname: example.org
+        statusCode: 301

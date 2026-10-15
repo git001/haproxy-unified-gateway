@@ -1,0 +1,14 @@
+from: haproxytech
+metadata:
+  hug:
+    HTTPRoute:
+      e2e-tests-httproute/route-echo-1:
+        Generation: 1
+        LinkID: hug
+mode: http
+name: hug_redirect_9769de3253e6068ceb3c78cf92e3305c
+http_request_rule_list:
+- redir_code: 301
+  redir_type: location
+  redir_value: '%[ssl_fc,iif(https,http)]://example.org%[path]'
+  type: redirect

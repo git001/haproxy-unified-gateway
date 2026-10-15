@@ -354,15 +354,22 @@ func requestRedirectRules(f *gatewayv1.HTTPRequestRedirectFilter, matchPrefix st
 		}}
 	}
 
-	// Build the authority prefix (scheme://host:port) shared by all location rules.
+	// Build the authority prefix (scheme://host:port) shared by all location
+	// rules. An omitted scheme means "keep the request scheme", so it is only
+	// resolved server-side: the Location must still be absolute.
+	hasAuthority := f.Scheme != nil || f.Hostname != nil || f.Port != nil
 	var authority strings.Builder
-	if f.Scheme != nil {
-		_, _ = authority.WriteString(*f.Scheme)
+	if hasAuthority {
+		if f.Scheme != nil {
+			_, _ = authority.WriteString(*f.Scheme)
+		} else {
+			_, _ = authority.WriteString("%[ssl_fc,iif(https,http)]")
+		}
 		_, _ = authority.WriteString("://")
 	}
 	if f.Hostname != nil {
 		_, _ = authority.WriteString(string(*f.Hostname))
-	} else if f.Scheme != nil || f.Port != nil {
+	} else if hasAuthority {
 		_, _ = authority.WriteString("%[req.hdr(host),host_only]")
 	}
 	if f.Port != nil {
