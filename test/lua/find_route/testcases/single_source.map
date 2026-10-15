@@ -9,3 +9,5 @@ regex_when_nothing_else_matches  /123           lr1  -    be_r1_digits
 no_match_returns_no_route        /nowhere       lr1  -    -
 wildcard_source_only             /special/x     -    lr2  be_r2_special
 wildcard_default_prefix          /anything      -    lr2  be_r2_default
+prefix_needs_element_boundary    /apiexample    lr1  -    -
+longer_prefix_non_boundary_falls_back  /api/v2example  lr1  -    be_r1_api

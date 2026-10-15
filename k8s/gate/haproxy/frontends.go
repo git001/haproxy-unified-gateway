@@ -466,10 +466,13 @@ func httpFrontendRules(
 			Metadata: map[string]any{"hug": "fast path: exact path match"},
 		},
 		{
+			// http-request set-var(txn.route,ifnotexists) var(txn.blr),concat("/"),map_beg(<prefix>)
+			// Prefix keys are element-terminated, so the lookup input gains a
+			// trailing "/": /v2 must not match /v2example.
 			Type:     "set-var",
 			VarName:  "route,ifnotexists",
 			VarScope: "txn",
-			VarExpr:  "var(txn.blr),map_beg(" + pathPrefixMap + ")",
+			VarExpr:  "var(txn.blr),concat(\"/\"),map_beg(" + pathPrefixMap + ")",
 			Cond:     "if",
 			CondTest: "fast_path",
 			Metadata: map[string]any{"hug": "fast path: longest prefix match"},

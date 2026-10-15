@@ -515,12 +515,15 @@ local function resolve_passing(txn, files, blr, lr_len, ctx, now)
 
     local idx = index_for(files.prefix, now)
     if idx ~= nil then
+        -- Prefix keys are element-terminated: probe blr + "/" so /v2 does
+        -- not match /v2example.
+        local probe = blr .. "/"
         local maxlen = idx.maxlen
-        if maxlen > #blr then
-            maxlen = #blr
+        if maxlen > #probe then
+            maxlen = #probe
         end
         for len = maxlen, 1, -1 do
-            v = idx.values[blr:sub(1, len)]
+            v = idx.values[probe:sub(1, len)]
             if v ~= nil then
                 r = resolve_value(txn, v, ctx)
                 if r then

@@ -105,10 +105,11 @@ against the request in the precedence order above.
 Routes without conditions keep the legacy map-value format and are resolved
 natively without any Lua on the request path.
 
+`PathPrefix` matches at path-element boundaries: a prefix is stored with a
+trailing `/` and the lookup input gains one too, so `/v2` matches `/v2` and
+`/v2/...` but not `/v2example`. This holds for the native lookup and for
+`lua.find_route`/`lua.select_route` alike.
+
 Known divergences from the spec (also tracked in the repository docs):
 
-- hostname precedence vs path specificity ordering,
-- `PathPrefix` matches by characters, not path elements: a request to
-  `/v2example` matches the prefix `/v2`, where the spec requires element
-  boundaries. This is why the `HTTPRouteMatching` conformance suite stays
-  skipped; the four other match suites run and pass.
+- hostname precedence vs path specificity ordering.

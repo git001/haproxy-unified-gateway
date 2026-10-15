@@ -111,15 +111,15 @@ func TestResolveEntry(t *testing.T) {
 			pathType:   gatewayv1.PathMatchPathPrefix,
 			path:       "/foo",
 			wantBucket: bucketPrefix,
-			wantKey:    maps.EntryKey{Hostname: "example.com", Path: "/foo"},
+			wantKey:    maps.EntryKey{Hostname: "example.com", Path: "/foo/"},
 		},
 		{
-			name:       "prefix-path wildcard-host",
+			name:       "prefix-path wildcard-host uses prefix bucket",
 			hostname:   "*.example.com",
 			pathType:   gatewayv1.PathMatchPathPrefix,
 			path:       "/foo",
-			wantBucket: bucketRegex,
-			wantKey:    maps.EntryKey{Hostname: `\.example\.com`, Path: "/foo.*"},
+			wantBucket: bucketPrefix,
+			wantKey:    maps.EntryKey{Hostname: ".example.com", Path: "/foo/"},
 		},
 		{
 			name:       "regex-path exact-host",
@@ -155,13 +155,13 @@ func TestResolveEntry(t *testing.T) {
 			wantKey:    maps.EntryKey{Hostname: `^example\.com`, Path: "/foo"},
 		},
 		{
-			// root path "/" with prefix type and wildcard host → path becomes "/.*"
+			// root path "/" with prefix type and wildcard host → prefix bucket, root key
 			name:       "prefix-path root wildcard-host",
 			hostname:   "*.example.com",
 			pathType:   gatewayv1.PathMatchPathPrefix,
 			path:       "/",
-			wantBucket: bucketRegex,
-			wantKey:    maps.EntryKey{Hostname: `\.example\.com`, Path: "/.*"},
+			wantBucket: bucketPrefix,
+			wantKey:    maps.EntryKey{Hostname: ".example.com", Path: "/"},
 		},
 	}
 
@@ -202,6 +202,35 @@ func TestResolveEntry(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestResolveEntryPrefixElementBoundary: prefix keys are element-terminated, so
+// the configured /v2 and /v2/ land on one key while a request path only matches
+// at a path-element boundary (lookups append "/" on the native and Lua sides).
+func TestResolveEntryPrefixElementBoundary(t *testing.T) {
+	ptr := func(s gatewayv1.PathMatchType) *gatewayv1.PathMatchType { return &s }
+	strPtr := func(s string) *string { return &s }
+
+	for _, tc := range []struct{ in, want string }{
+		{"/v2", "/v2/"},
+		{"/v2/", "/v2/"},
+		{"/", "/"},
+		{"", "/"},
+		{"/api/", "/api/"},
+	} {
+		d := newDesiredBackendsMaps()
+		match := gatewayv1.HTTPRouteMatch{Path: &gatewayv1.HTTPPathMatch{
+			Type:  ptr(gatewayv1.PathMatchPathPrefix),
+			Value: strPtr(tc.in),
+		}}
+		_, key := d.resolveEntry("l1/r1", match)
+		if key.Path != tc.want {
+			t.Errorf("prefix %q → path key %q, want %q", tc.in, key.Path, tc.want)
+		}
+		if _, ok := d.prefix[key]; !ok {
+			t.Errorf("prefix %q: key %+v missing from prefix bucket", tc.in, key)
+		}
 	}
 }
 

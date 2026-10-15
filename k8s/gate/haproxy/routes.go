@@ -320,7 +320,6 @@ func (d *desiredBackendsMaps) resolveEntry(hostname string, match gatewayv1.HTTP
 	if match.Path != nil && match.Path.Type != nil {
 		pathType = *match.Path.Type
 	}
-	originalHostname := hostname
 	hostname = sanitizeHostname(hostname, pathType)
 	selected := d.exact
 	switch pathType {
@@ -328,14 +327,10 @@ func (d *desiredBackendsMaps) resolveEntry(hostname string, match gatewayv1.HTTP
 		// Wildcard-host + exact-path is routed via the listener/listener-route
 		// map pipeline upstream; the path bucket remains d.exact here.
 	case gatewayv1.PathMatchPathPrefix:
-		if isDomainWildcard(originalHostname) {
-			selected = d.regex
-			path += ".*"
-			path = sanitizeRegexp(path)
-			hostname = sanitizeRegexp(hostname)
-		} else {
-			selected = d.prefix
-		}
+		// Element-terminated keys: lookups append "/" (native and Lua), so
+		// /v2 matches /v2 and /v2/... but never /v2example.
+		selected = d.prefix
+		path = strings.TrimRight(path, "/") + "/"
 	case gatewayv1.PathMatchRegularExpression:
 		selected = d.regex
 		path = strings.TrimPrefix(path, "^")

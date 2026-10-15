@@ -9,3 +9,5 @@ root_version_two      example.org  /     Version:two  be_part2_ver
 v2_longer_prefix      example.org  /v2   -            be_part2_v2
 v2_sub_path           example.org  /v2/x -            be_part2_v2
 v2_version_header     example.org  /v2   Version:one  be_part2_v2
+v2_not_a_segment      example.org  /v2example -        be_part1_path
+v2_inner_segment      example.org  /foo/v2/x  -        be_part1_path

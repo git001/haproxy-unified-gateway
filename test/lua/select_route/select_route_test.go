@@ -82,6 +82,9 @@ func TestSelectRoute(t *testing.T) {
 		// when its own condition passes, and falls through to the catch-all
 		// when it does not.
 		{name: "longer prefix passes its condition", path: "/api", hdrs: []string{"admin", "yes"}, wantBody: "be_admin"},
+		{name: "descendant path matches the prefix", path: "/api/x", hdrs: []string{"admin", "yes"}, wantBody: "be_admin"},
+		{name: "trailing slash matches the prefix", path: "/api/", hdrs: []string{"admin", "yes"}, wantBody: "be_admin"},
+		{name: "longer path segment must not match a shorter prefix", path: "/apiexample", hdrs: []string{"admin", "yes"}, wantStatus: 404, wantBody: "NOT FOUND"},
 		{name: "failed conditional falls to shorter prefix", path: "/api", hdrs: []string{"Version", "one"}, wantBody: "be_one"},
 		{name: "failed conditional with no fallback 404s", path: "/api", wantStatus: 404, wantBody: "NOT FOUND"},
 

@@ -159,7 +159,7 @@ http_request_rule_list:
   metadata:
     hug: 'fast path: longest prefix match'
   type: set-var
-  var_expr: var(txn.blr),map_beg(/tmp/hug/e2e-tests-gateway-tls-multiple/maps/hug_http_8080/path_prefix.map)
+  var_expr: var(txn.blr),concat("/"),map_beg(/tmp/hug/e2e-tests-gateway-tls-multiple/maps/hug_http_8080/path_prefix.map)
   var_name: route,ifnotexists
   var_scope: txn
 - cond: if
