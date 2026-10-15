@@ -618,6 +618,59 @@ func TestNoBackendRefsNormalRefsUnchanged(t *testing.T) {
 	}
 }
 
+// Under compatibility, a rule with invalid backendRefs must own the
+// response-only backend for its traffic share; valid sibling refs keep their
+// own backend. Without the flag, the whole rule is dropped as before.
+func TestInvalidBackendRefsRuleUnderCompat(t *testing.T) {
+	routeKey := k8stypes.NamespacedName{Namespace: "ns", Name: "route"}
+	matches := blockedPrefixMatches()
+	refs := []gatewayv1.HTTPBackendRef{
+		{Name: "good", Port: new(gatewayv1.PortNumber(80))},
+		{Name: "bad", Port: new(gatewayv1.PortNumber(80))},
+	}
+
+	for _, compat := range []bool{false, true} {
+		t.Run(map[bool]string{false: "compat off drops the rule", true: "compat on answers 500"}[compat], func(t *testing.T) {
+			mgr := newNoBackendRefsTestMgr()
+			mgr.params.GWAPICompat = compat
+			rule := backendRefsRule(nil, matches, refs, true)
+			rule.CheckBackendRef.Set(refs[1].BackendObjectReference, tree.CheckResult{Valid: false})
+			rule.Valid = false
+
+			if err := mgr.upsertHTTPRouteBackends(routeKey, noBackendRefsRoute(rule)); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			good, err := mgr.getBackendName(k8stypes.NamespacedName{Namespace: "ns", Name: "good"}, 80, "_")
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			respond := mgr.getNoBackendRefsBackendName(nil, "/blocked")
+
+			owned := mgr.backendOwners.getBackendsReferencedByHTTPRoute(routeKey)
+			if !compat {
+				if len(owned) != 0 {
+					t.Fatalf("expected no owned backend, got %v", owned)
+				}
+				return
+			}
+			if _, ok := owned[good]; !ok {
+				t.Errorf("valid ref backend %q must stay owned, got %v", good, owned)
+			}
+			if _, ok := owned[respond]; !ok {
+				t.Errorf("route must own the response-only backend %q, got %v", respond, owned)
+			}
+			impacted, ok := mgr.backendsImpactedInCycle.Upserted[respond][routeKey]
+			if !ok {
+				t.Fatalf("expected the response-only backend %q to be upserted, got %v", respond, mgr.backendsImpactedInCycle.Upserted)
+			}
+			if !impacted.IsNoBackendRefs || impacted.IsRedirect {
+				t.Errorf("expected a response-only pseudo-backend, got %+v", impacted)
+			}
+		})
+	}
+}
+
 // Invalid backendless rules must not be handled at all.
 func TestNoBackendRefsInvalidRuleNotHandled(t *testing.T) {
 	routeKey := k8stypes.NamespacedName{Namespace: "ns", Name: "route"}

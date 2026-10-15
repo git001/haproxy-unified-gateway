@@ -170,7 +170,13 @@ func (b *RouteMgrImpl) onValidHTTPRouteUpserted(origin maps.ResourceOrigin, rout
 			continue
 		}
 
-		if !rule.Valid {
+		// Unprogrammable filters or matches drop the rule. Invalid backendRefs
+		// do not under compatibility: their traffic share is answered by the
+		// response-only backend instead of falling through to another rule.
+		if !rule.CheckFilters.Valid || !rule.CheckMatches.Valid {
+			continue
+		}
+		if !rule.Valid && !b.topManager.params.GWAPICompat {
 			continue
 		}
 
@@ -182,34 +188,42 @@ func (b *RouteMgrImpl) onValidHTTPRouteUpserted(origin maps.ResourceOrigin, rout
 			continue
 		}
 
+		matchPrefix := extractFirstPathPrefix(rule.K8sResource.Matches)
+
 		for _, backend := range rule.K8sResource.BackendRefs {
 			checkResult, ok := rule.CheckBackendRef.Get(backend.BackendObjectReference)
-			if !ok || !checkResult.Valid {
+			var backendName string
+			if ok && checkResult.Valid {
+				svckey := k8stypes.NamespacedName{
+					Name: string(backend.Name),
+				}
+				if backend.Namespace == nil {
+					svckey.Namespace = route.K8sResource.Namespace
+				} else {
+					svckey.Namespace = string(*backend.Namespace)
+				}
+				svcPort := int32(0)
+				if backend.Port != nil {
+					svcPort = int32(*backend.Port)
+				}
+				filterHash := getFilterHash(rule.K8sResource.Filters, backend.Filters)
+				var err error
+				backendName, err = b.topManager.getBackendName(svckey, svcPort, filterHash)
+				if err != nil {
+					b.topManager.logger.LogAttrs(
+						context.Background(), slog.LevelError, "Processing HTTPRoute [map update]",
+						logging.LogAttrError(err),
+					)
+					continue
+				}
+			} else if b.topManager.params.GWAPICompat {
+				// Gateway API: traffic bound for an invalid backendRef must
+				// receive a 500 instead of falling through to another rule.
+				backendName = b.topManager.getNoBackendRefsBackendName(rule.K8sResource.Filters, matchPrefix)
+			} else {
 				b.topManager.logger.LogAttrs(
 					context.Background(), slog.LevelDebug, "Processing HTTPRoute [map update] - backend not valid",
 					logging.LogAttrBackendName(string(backend.Name)),
-				)
-				continue
-			}
-
-			svckey := k8stypes.NamespacedName{
-				Name: string(backend.Name),
-			}
-			if backend.Namespace == nil {
-				svckey.Namespace = route.K8sResource.Namespace
-			} else {
-				svckey.Namespace = string(*backend.Namespace)
-			}
-			svcPort := int32(0)
-			if backend.Port != nil {
-				svcPort = int32(*backend.Port)
-			}
-			filterHash := getFilterHash(rule.K8sResource.Filters, backend.Filters)
-			backendName, err := b.topManager.getBackendName(svckey, int32(svcPort), filterHash)
-			if err != nil {
-				b.topManager.logger.LogAttrs(
-					context.Background(), slog.LevelError, "Processing HTTPRoute [map update]",
-					logging.LogAttrError(err),
 				)
 				continue
 			}

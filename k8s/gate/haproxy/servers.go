@@ -300,10 +300,15 @@ func (b *HaproxyConfMgrImpl) backendsByServiceForHTTPRoute(routeOwners map[clien
 		}
 		// Iterate over each rule, extract the service name
 		for _, rule := range treeHTTPRoute.Rules {
-			if !rule.Valid {
+			if !rule.Valid && !b.params.GWAPICompat {
 				continue
 			}
 			for _, hBackendRef := range rule.K8sResource.BackendRefs {
+				// Invalid refs route to the response-only backend, so their
+				// service must not feed servers into this backend.
+				if checkResult, ok := rule.CheckBackendRef.Get(hBackendRef.BackendObjectReference); !ok || !checkResult.Valid {
+					continue
+				}
 				backendRef := hBackendRef.BackendObjectReference
 				nsName := utils.GetNamespacedName(backendRef.Name, backendRef.Namespace, treeHTTPRoute.K8sResource.Namespace)
 				filterHash := getFilterHash(rule.K8sResource.Filters, hBackendRef.Filters)

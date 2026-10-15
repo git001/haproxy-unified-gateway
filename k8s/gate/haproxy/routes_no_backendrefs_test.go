@@ -170,6 +170,43 @@ func TestNoBackendRefsRouteMapRedirectAndInvalidRules(t *testing.T) {
 	}
 }
 
+// Under compatibility, a rule with an invalid backendRef keeps its
+// match: its traffic share routes to the response-only backend while valid
+// sibling refs keep their own backend. Without the flag the rule disappears.
+func TestInvalidBackendRefsRouteMapUnderCompat(t *testing.T) {
+	refs := []gatewayv1.HTTPBackendRef{
+		{Name: "good", Port: new(gatewayv1.PortNumber(80))},
+		{Name: "bad", Port: new(gatewayv1.PortNumber(80))},
+	}
+	for _, compat := range []bool{false, true} {
+		t.Run(map[bool]string{false: "off", true: "on"}[compat], func(t *testing.T) {
+			mgr, route, files := noBackendRefsMapFixture()
+			mgr.topManager.params.GWAPICompat = compat
+			rule := routeMapRule(gatewayv1.HTTPRouteMatch{}, refs)
+			rule.CheckBackendRef.Set(refs[1].BackendObjectReference, tree.CheckResult{Valid: false})
+			rule.Valid = false
+			route.Rules = []*tree.HTTPRouteRule{rule}
+			applyHTTPRouteMaps(t, mgr, route, files)
+
+			if !compat {
+				require.Empty(t, files[1].Entries)
+				return
+			}
+			entry := files[1].Entries[maps.EntryKey{Hostname: "l1/r1", Path: "/"}]
+			require.NotNil(t, entry)
+			good, err := mgr.topManager.getBackendName(k8stypes.NamespacedName{Namespace: "ns", Name: "good"}, 80, "_")
+			require.NoError(t, err)
+			respond := mgr.topManager.getNoBackendRefsBackendName(nil, "")
+			targets := map[string]struct{}{}
+			for _, v := range entry.DesiredValue {
+				targets[v.ValueName] = struct{}{}
+			}
+			require.Contains(t, targets, good)
+			require.Contains(t, targets, respond)
+		})
+	}
+}
+
 func TestNoBackendRefsRouteMapUpdates(t *testing.T) {
 	mgr, route, files := noBackendRefsMapFixture()
 	refs := []gatewayv1.HTTPBackendRef{{

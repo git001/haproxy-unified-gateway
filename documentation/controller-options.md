@@ -220,7 +220,8 @@ controller, err := controller.New(opt.FrontendNameTemplate(template))
 
 ### GWAPICompat
 
-GWAPICompat answers 500 on matched backendless rules, for conformance.
+GWAPICompat answers 500 for matched rules that cannot forward: no
+backendRefs, or invalid ones, for conformance.
 
 Example:
 ```go

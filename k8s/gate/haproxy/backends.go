@@ -216,18 +216,17 @@ func (b *HaproxyConfMgrImpl) upsertHTTPRouteBackends(routeKey k8stypes.Namespace
 			if !rule.CheckFilters.Valid || !rule.CheckMatches.Valid {
 				continue
 			}
-			beName := b.getRedirectBackendName(k8sRule.Filters)
-			if err := b.backendOwners.addHTTPRoute(beName, routeKey, route.K8sResource); err != nil {
-				errs.Add(err)
-				continue
-			}
-			b.addImpactedHTTPRedirectBackendUpserted(beName, routeKey, k8sRule.Filters,
-				extractFirstPathPrefix(k8sRule.Matches))
-			upsertedBackendsReferencedByRoute[beName] = struct{}{}
+			b.registerRedirectRuleBackend(routeKey, route, k8sRule, upsertedBackendsReferencedByRoute, &errs)
 			continue
 		}
 
-		if !rule.Valid {
+		// Unprogrammable filters or matches drop the rule. Invalid backendRefs
+		// do not under compatibility: their traffic share is answered by the
+		// response-only backend instead of falling through to another rule.
+		if !rule.CheckFilters.Valid || !rule.CheckMatches.Valid {
+			continue
+		}
+		if !rule.Valid && !b.params.GWAPICompat {
 			continue
 		}
 
@@ -236,12 +235,7 @@ func (b *HaproxyConfMgrImpl) upsertHTTPRouteBackends(routeKey k8stypes.Namespace
 
 		// A valid backendless rule terminates matching traffic itself.
 		if len(k8sRule.BackendRefs) == 0 {
-			beName, err := b.registerNoBackendRefsBackend(routeKey, route, k8sRule, matchPrefix)
-			if err != nil {
-				errs.Add(err)
-				continue
-			}
-			upsertedBackendsReferencedByRoute[beName] = struct{}{}
+			b.registerResponseOnlyBackend(routeKey, route, k8sRule, matchPrefix, upsertedBackendsReferencedByRoute, &errs)
 			continue
 		}
 
@@ -269,6 +263,12 @@ func (b *HaproxyConfMgrImpl) upsertHTTPRouteBackends(routeKey k8stypes.Namespace
 			}
 			// If the specific backendCheck result is ok, add the BE
 			if !checkResult.Valid {
+				if !b.params.GWAPICompat {
+					continue
+				}
+				// Gateway API: the invalid ref's traffic share must still be
+				// answered, so the route also owns the response-only backend.
+				b.registerResponseOnlyBackend(routeKey, route, k8sRule, matchPrefix, upsertedBackendsReferencedByRoute, &errs)
 				continue
 			}
 			err = b.backendOwners.addHTTPRoute(beName, routeKey, route.K8sResource)
@@ -487,6 +487,35 @@ func (b *HaproxyConfMgrImpl) addImpactedNoBackendRefsBackendUpserted(backendName
 		b.backendsImpactedInCycle.Upserted[backendName] = make(map[client.ObjectKey]BackendImpactedInCycle)
 	}
 	b.backendsImpactedInCycle.Upserted[backendName][routeKey] = impactedBe
+}
+
+// registerRedirectRuleBackend registers the redirect pseudo-backend of a
+// redirect-only rule as owned by the route and upserted for the cycle.
+func (b *HaproxyConfMgrImpl) registerRedirectRuleBackend(routeKey k8stypes.NamespacedName, route *tree.HTTPRoute,
+	rule gatewayv1.HTTPRouteRule, upserted map[string]struct{}, errs *utils.Errors,
+) {
+	beName := b.getRedirectBackendName(rule.Filters)
+	if err := b.backendOwners.addHTTPRoute(beName, routeKey, route.K8sResource); err != nil {
+		errs.Add(err)
+		return
+	}
+	b.addImpactedHTTPRedirectBackendUpserted(beName, routeKey, rule.Filters,
+		extractFirstPathPrefix(rule.Matches))
+	upserted[beName] = struct{}{}
+}
+
+// registerResponseOnlyBackend registers the response-only backend answering a
+// rule that cannot forward — no backendRefs, or invalid ones under
+// compatibility — as owned by the route and upserted for the cycle.
+func (b *HaproxyConfMgrImpl) registerResponseOnlyBackend(routeKey k8stypes.NamespacedName, route *tree.HTTPRoute,
+	rule gatewayv1.HTTPRouteRule, matchPrefix string, upserted map[string]struct{}, errs *utils.Errors,
+) {
+	beName, err := b.registerNoBackendRefsBackend(routeKey, route, rule, matchPrefix)
+	if err != nil {
+		errs.Add(err)
+		return
+	}
+	upserted[beName] = struct{}{}
 }
 
 // registerNoBackendRefsBackend registers ownership and the impacted-pseudo-backend

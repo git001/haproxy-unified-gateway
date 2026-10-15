@@ -17,7 +17,8 @@ import (
 	"github.com/haproxytech/haproxy-unified-gateway/k8s/gate/config"
 )
 
-// GWAPICompat answers 500 on matched backendless rules, for conformance.
+// GWAPICompat answers 500 for matched rules that cannot forward: no
+// backendRefs, or invalid ones, for conformance.
 func GWAPICompat(compat bool) func(o *config.Configuration) error {
 	return func(o *config.Configuration) error {
 		o.HaproxyParams.GWAPICompat = compat

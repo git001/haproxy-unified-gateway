@@ -57,7 +57,7 @@ Point 6 is currently approximated: ties across routes on the same hostname
 are broken by alphabetical `{namespace}/{name}` order instead of creation
 timestamp first.
 
-## Matched rules without backends
+## Matched rules that cannot forward
 
 A rule that matches a request but has no `backendRefs` (omitted, or an
 empty list) terminates the match: the request never falls through to a
@@ -70,6 +70,14 @@ reach any backend. Requests that match no rule stay `404` in both modes,
 and a matching rule whose only action is a `RequestRedirect` filter keeps
 redirecting: the flag only changes the status-code of the terminal
 backendless rule.
+
+Under the same flag, a rule whose `backendRefs` cannot be resolved
+(missing Service, unsupported group/kind, or a cross-namespace reference
+no `ReferenceGrant` permits) keeps its match and answers `500` for its
+share of the traffic, instead of dropping the rule: valid sibling
+backends keep their own weights, so mixed rules forward the valid
+portion as before. Without the flag, any invalid `backendRef` drops the
+rule from routing, like an unprogrammable match.
 
 Conformance deployments enable this flag on every generated controller (see
 [conformance.md](conformance.md)).
