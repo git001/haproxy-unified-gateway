@@ -105,9 +105,6 @@ conformance-MR-GW-API-1_6_3:
     # Leave empty (default) to skip collection entirely.
     # Example: "run=hug-4ff08ccae6d535c8"  (sha derived from gateway ns/name)
     HUG_LABEL_COLLECT_LOGS: ""
-    # Same repo list, aliased from the anchor above so this job keeps its fixed
-    # list.
-    CONFORMANCE_SKIP_TESTS: *hug_conf_skip
   before_script:
     - export PATH=$PATH:/root/go/bin
     - docker login -u='$app' -p "$CI_REGISTRY_TOKEN" registry.haproxy.com
