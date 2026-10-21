@@ -205,14 +205,14 @@ func (h *AppManagerImpl) processCreate(created structured.Structured, mergeState
 	}
 
 	// Backends
-	for _, createdBE := range created.Backends {
+	for beName, createdBE := range created.Backends {
 		if createdBE == nil {
 			// Should not happend
 			h.logger.LogAttrs(context.Background(), slog.LevelError, "nil backend")
 			continue
 		}
 
-		err := h.client.BackendCreate(*createdBE, api.ConfigSnippet{})
+		err := h.client.BackendCreate(*createdBE, backendConfigSnippet(created, beName))
 		if err != nil {
 			h.logger.LogAttrs(
 				context.Background(), slog.LevelError, "failed to create backend",
@@ -332,7 +332,7 @@ func (h *AppManagerImpl) processUpdate(updated structured.Structured, mergeStrat
 	}
 
 	// Backends
-	for _, updatedBE := range updated.Backends {
+	for beName, updatedBE := range updated.Backends {
 		if updatedBE == nil {
 			// Should not happend
 			h.logger.LogAttrs(context.Background(), slog.LevelError, "nil backend")
@@ -341,7 +341,7 @@ func (h *AppManagerImpl) processUpdate(updated structured.Structured, mergeStrat
 		// TODO: need to check if only the Metadata has changed
 		// If so, no need to reload
 
-		err := h.client.BackendEdit(*updatedBE, api.ConfigSnippet{})
+		err := h.client.BackendEdit(*updatedBE, backendConfigSnippet(updated, beName))
 		if err != nil {
 			h.logger.LogAttrs(
 				context.Background(), slog.LevelError, "failed to edit backend",
@@ -432,6 +432,14 @@ func (h *AppManagerImpl) confUpdateProcessed(haproxyCfgDiffs diffs.HaproxyConfDi
 			)
 		}
 	}
+}
+
+// backendConfigSnippet returns the config snippet to write with the backend
+// beName of the diff conf: set when the diff carries the snippet of the
+// backend, otherwise the backend keeps its snippet.
+func backendConfigSnippet(conf structured.Structured, beName string) api.ConfigSnippet {
+	lines, ok := conf.BackendConfigSnippets[beName]
+	return api.ConfigSnippet{Lines: lines, Set: ok}
 }
 
 func addFrontendMetadataToResult(meta map[string]any, fe *models.Frontend) {
