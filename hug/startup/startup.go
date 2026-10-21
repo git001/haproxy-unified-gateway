@@ -22,6 +22,7 @@ import (
 	cfgoptions "github.com/haproxytech/client-native/v6/configuration/options"
 	"github.com/haproxytech/client-native/v6/models"
 	hugconfig "github.com/haproxytech/haproxy-unified-gateway/hug/configuration"
+	"github.com/haproxytech/haproxy-unified-gateway/hug/haproxy/api"
 	"github.com/haproxytech/haproxy-unified-gateway/k8s/gate/constants"
 	md "github.com/haproxytech/haproxy-unified-gateway/k8s/gate/haproxy/metadata"
 	"github.com/haproxytech/haproxy-unified-gateway/k8s/gate/haproxy/structured"
@@ -57,10 +58,21 @@ func StructuredFromFile(hugConfig hugconfig.HUGConfig, linkID string) (structure
 		return structured.Structured{}, err
 	}
 
+	// The config snippets of the backends are read too, so that a snippet
+	// which is not wanted anymore is removed from the configuration.
+	p, err := confClient.GetParser("")
+	if err != nil {
+		return structured.Structured{}, err
+	}
 	structuredCfg := structured.NewStructuredConf()
 	for _, backend := range backends {
 		if isUnifiedGatewayManaged(backend, linkID) {
 			structuredCfg.Backends[backend.Name] = backend
+			configSnippet, err := api.BackendConfigSnippet(p, backend.Name)
+			if err != nil {
+				return structured.Structured{}, err
+			}
+			structuredCfg.BackendConfigSnippets[backend.Name] = configSnippet
 		}
 	}
 	for _, frontend := range frontends {
