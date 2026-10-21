@@ -29,6 +29,12 @@ type Structured struct {
 	Backends  map[string]*models.Backend  // map[backendName]  => Backend
 	Globals   map[string]*models.Global   // map[GlobalKey]    => Global (at most one entry)
 	Defaults  map[string]*models.Defaults // map[DefaultsKey]  => Defaults (at most one entry)
+	// BackendConfigSnippets holds the raw lines of the config snippets of the
+	// backends, which client-native models do not carry. In the diffs, an entry
+	// is set with each Created or Updated backend whose snippet is known, an
+	// empty one removing the snippet. A backend without entry keeps the snippet
+	// already in the configuration, since some updates only concern its servers.
+	BackendConfigSnippets map[string][]string // map[backendName] => lines
 }
 
 func NewStructuredConf() Structured {
@@ -37,6 +43,8 @@ func NewStructuredConf() Structured {
 		Backends:  make(map[string]*models.Backend),
 		Globals:   make(map[string]*models.Global),
 		Defaults:  make(map[string]*models.Defaults),
+
+		BackendConfigSnippets: make(map[string][]string),
 	}
 }
 
