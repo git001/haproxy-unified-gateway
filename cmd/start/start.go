@@ -94,5 +94,8 @@ func SetupGateConfig(hugConfig hugconfig.HUGConfig) gateconfig.GateConfigOptions
 	if hugConfig.AcceptProxy {
 		opts = append(opts, opt.AcceptProxy())
 	}
+	if hugConfig.EnableBackendConfigSnippets {
+		opts = append(opts, opt.EnableBackendConfigSnippets())
+	}
 	return opts
 }

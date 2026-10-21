@@ -30,6 +30,7 @@ Available options:
 | DisableIPv6 |  |
 | DisableIngressStatusUpdate | `disable`(bool) |
 | EmptyIngressClass | `empty`(bool) |
+| EnableBackendConfigSnippets |  |
 | EnableIngress | `enable`(bool) |
 | FrontendNameTemplate | `template`(string) |
 | GWAPICompat | `compat`(bool) |
@@ -190,6 +191,24 @@ import (
 )
 
 controller, err := controller.New(opt.EmptyIngressClass(empty))
+```
+
+### EnableBackendConfigSnippets
+
+EnableBackendConfigSnippets writes the config_snippet field of the Backend
+CRs into the backends they are attached to, for the HAProxy directives the
+other fields do not support. A snippet allows any HAProxy configuration, so
+it is ignored unless this option is set: only enable it when the users
+allowed to create Backend CRs are trusted with the HAProxy configuration.
+
+Example:
+```go
+import (
+  github.com/haproxytech/haproxy-unified-gateway/k8s/gate
+  github.com/haproxytech/haproxy-unified-gateway/k8s/gate/options
+)
+
+controller, err := controller.New(opt.EnableBackendConfigSnippets())
 ```
 
 ### EnableIngress

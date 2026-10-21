@@ -73,6 +73,7 @@ type HUGConfig struct {
 	EnableIngress                bool `ff:"          long: enable-ingress,                             usage: 'enable Kubernetes Ingress support: watch Ingress/IngressClass and translate them onto a synthetic Gateway (disabled by default)'"`
 	DisableIngressStatusUpdate   bool `ff:"          long: disable-ingress-status-update,              usage: 'do not write the LoadBalancer status (status.loadBalancer.ingress) back onto managed Ingresses'"`
 	GWAPICompat                  bool `ff:"          long: gwapi-compat,                               usage: 'Gateway API compatibility: a matched HTTPRoute rule that cannot forward (no backendRefs, or invalid ones) responds 500 instead of 404 (enabled by GWAPI_COMPAT env var)'"`
+	EnableBackendConfigSnippets  bool `ff:"          long: enable-backend-config-snippets,             usage: 'write the config_snippet of the Backend CRs into the backends (raw HAProxy configuration: only for trusted Backend CR authors)'"`
 }
 
 //revive:enable:line-length-limit

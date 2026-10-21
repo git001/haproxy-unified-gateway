@@ -58,6 +58,15 @@ EmptyIngressClass:
     args:
         - name: empty
           type: bool
+EnableBackendConfigSnippets:
+    name: EnableBackendConfigSnippets
+    comment: |
+        EnableBackendConfigSnippets writes the config_snippet field of the Backend
+        CRs into the backends they are attached to, for the HAProxy directives the
+        other fields do not support. A snippet allows any HAProxy configuration, so
+        it is ignored unless this option is set: only enable it when the users
+        allowed to create Backend CRs are trusted with the HAProxy configuration.
+    args: []
 EnableIngress:
     name: EnableIngress
     comment: ""

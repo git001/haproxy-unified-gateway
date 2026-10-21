@@ -66,6 +66,9 @@ type HaproxyConfParams struct {
 	// GWAPICompat answers 500 for matched rules that cannot forward: no
 	// backendRefs, or invalid ones, for Gateway API conformance.
 	GWAPICompat bool
+	// EnableBackendConfigSnippets writes the config_snippet of the Backend CRs
+	// into the backends. Disabled, the snippets are ignored.
+	EnableBackendConfigSnippets bool
 }
 
 type HaproxyDirs struct {
