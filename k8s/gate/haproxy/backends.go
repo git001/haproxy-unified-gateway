@@ -802,7 +802,7 @@ func (b *HaproxyConfMgrImpl) upsertResponseOnlyBackend(backendName string, md me
 	} else {
 		be = b.newNoBackendRefsBackend(backendName, md, ruleFilters, matchPrefix)
 	}
-	if err := b.configuration.upsertBackend(b.logger, be); err != nil {
+	if err := b.configuration.upsertBackend(b.logger, be, nil); err != nil {
 		return err
 	}
 	if b.firstSync.flag {
@@ -1314,7 +1314,7 @@ func (b *HaproxyConfMgrImpl) processBackendsUpsertedInCycle() utils.Errors {
 			continue
 		}
 
-		if err := b.configuration.upsertBackend(b.logger, be); err != nil {
+		if err := b.configuration.upsertBackend(b.logger, be, nil); err != nil {
 			errs.Add(err)
 			continue
 		}

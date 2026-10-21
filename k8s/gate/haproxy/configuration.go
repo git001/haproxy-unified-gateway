@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -123,17 +124,28 @@ func (c *Configuration) deleteFrontend(logger *slog.Logger, feName string) error
 	return nil
 }
 
-func (c *Configuration) upsertBackend(logger *slog.Logger, be *models.Backend) error {
+// upsertBackend stores the backend be, with the lines of its config snippet,
+// and records the diff. The snippet is recorded with the backend, an empty one
+// removing the snippet of the configuration.
+func (c *Configuration) upsertBackend(logger *slog.Logger, be *models.Backend, configSnippet []string) error {
 	if be == nil {
 		logger.LogAttrs(context.Background(), slog.LevelError, "nil backend")
 		return errors.New("nil backend")
+	}
+	configSnippet = slices.Clone(configSnippet)
+	if configSnippet == nil {
+		configSnippet = []string{}
+	}
+	if c.structured.BackendConfigSnippets == nil {
+		c.structured.BackendConfigSnippets = make(map[string][]string)
 	}
 
 	if previousBe, ok := c.structured.Backends[be.Name]; ok {
 		// Check if they are the same
 		// Here, the input parameter be has no Servers, it's only the Backend without Servers that we want to compare
 		// Even though Servers are part of the structured Backend, they are managed differently from Backend fields.
-		if cmp.Equal(*previousBe, *be, cmpopts.IgnoreFields(models.Backend{}, "Servers")) {
+		if cmp.Equal(*previousBe, *be, cmpopts.IgnoreFields(models.Backend{}, "Servers")) &&
+			slices.Equal(c.structured.BackendConfigSnippets[be.Name], configSnippet) {
 			logger.LogAttrs(
 				context.Background(), slog.LevelDebug, "Backend [same]",
 				logging.LogAttrBackendName(be.Name),
@@ -156,7 +168,9 @@ func (c *Configuration) upsertBackend(logger *slog.Logger, be *models.Backend) e
 		}
 
 		c.diffs.Updated.Backends[be.Name] = deepCopied
+		c.diffs.Updated.BackendConfigSnippets[be.Name] = configSnippet
 		c.structured.Backends[be.Name] = be
+		c.structured.BackendConfigSnippets[be.Name] = configSnippet
 	} else {
 		// Create new backend
 		logger.LogAttrs(
@@ -172,7 +186,9 @@ func (c *Configuration) upsertBackend(logger *slog.Logger, be *models.Backend) e
 		}
 
 		c.structured.Backends[be.Name] = deepCopied
+		c.structured.BackendConfigSnippets[be.Name] = configSnippet
 		c.diffs.Created.Backends[be.Name] = deepCopied
+		c.diffs.Created.BackendConfigSnippets[be.Name] = configSnippet
 	}
 	return nil
 }
@@ -373,5 +389,6 @@ func (c *Configuration) deleteBackend(logger *slog.Logger, beName string) error 
 
 	c.diffs.Deleted.Backends[be.Name] = nil
 	delete(c.structured.Backends, beName)
+	delete(c.structured.BackendConfigSnippets, beName)
 	return nil
 }
