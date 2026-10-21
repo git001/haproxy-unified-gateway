@@ -654,7 +654,7 @@ func (b *HaproxyConfMgrImpl) newBackend(backendName string, md metadata.MetaData
 	backendRef gatewayv1.HTTPBackendRef, ruleFilters []gatewayv1.HTTPRouteFilter, matchPrefix string,
 	sessionPersistence *gatewayv1.SessionPersistence,
 	httpTimeouts *gatewayv1.HTTPRouteTimeouts, namespace string, isHTTPBackend bool, isIngressBackend bool,
-) (*models.Backend, error) {
+) (*models.Backend, []string, error) {
 	// First, we merge the Backend CRDs from filters, if there are some
 	// Backend CRDs are defined in the Filters of type: ExtensionRef
 	// We gather all those filters, merge them and apply them
@@ -685,7 +685,16 @@ func (b *HaproxyConfMgrImpl) newBackend(backendName string, md metadata.MetaData
 	}
 
 	// Now Merge with the Backend CRs
-	errs := b.mergeWithBackendCRs(backendRef, newBackend, namespace, isIngressBackend)
+	configSnippet, errs := b.mergeWithBackendCRs(backendRef, newBackend, namespace, isIngressBackend)
+	if len(configSnippet) > 0 && !b.params.EnableBackendConfigSnippets {
+		b.logger.LogAttrs(
+			context.Background(), slog.LevelWarn,
+			"Backend CR config_snippet ignored, HUG runs without --enable-backend-config-snippets",
+			logging.LogAttrCategory(logging.LogCategoryHaproxyCfgMgr),
+			logging.LogAttrBackendName(backendName),
+		)
+		configSnippet = nil
+	}
 	// Handling session persistence with cookie
 	if sessionPersistence != nil &&
 		utils.PointerDefaultValueIfNil(sessionPersistence.Type) == gatewayv1.CookieBasedSessionPersistence {
@@ -738,7 +747,7 @@ func (b *HaproxyConfMgrImpl) newBackend(backendName string, md metadata.MetaData
 	newBackend.HTTPRequestRuleList = append(newBackend.HTTPRequestRuleList, filterResult.HTTPRequestRules...)
 	newBackend.HTTPResponseRuleList = append(newBackend.HTTPResponseRuleList, filterResult.HTTPResponseRules...)
 
-	return newBackend, errs.Result()
+	return newBackend, configSnippet, errs.Result()
 }
 
 // newRedirectBackend creates a backend that only issues an HTTP redirect with
@@ -811,14 +820,20 @@ func (b *HaproxyConfMgrImpl) upsertResponseOnlyBackend(backendName string, md me
 	return nil
 }
 
+// mergeWithBackendCRs merges the Backend CRs attached to backendRef into
+// newBackend, and returns the lines of their config snippets, which are not
+// part of the model: appended like the slices in Append mode, replaced in
+// Override mode, and replaced by the one of the Service-level CR.
 func (b *HaproxyConfMgrImpl) mergeWithBackendCRs(backendRef gatewayv1.HTTPBackendRef, newBackend *models.Backend,
 	namespace string, isIngressBackend bool,
-) utils.Errors {
+) ([]string, utils.Errors) {
 	var errs utils.Errors
+	var configSnippet []string
 
 	// Now Merge with the Backend CRs
 	// Default Merge options is : Append
 	opts := []func(*mergo.Config){mergo.WithOverride, mergo.WithAppendSlice}
+	appendSnippet := true
 
 	for _, filter := range backendRef.Filters {
 		if filter.Type != gatewayv1.HTTPRouteFilterExtensionRef {
@@ -844,9 +859,11 @@ func (b *HaproxyConfMgrImpl) mergeWithBackendCRs(backendRef gatewayv1.HTTPBacken
 			switch filter.ExtensionRef.Name {
 			case "Override":
 				opts = []func(*mergo.Config){mergo.WithOverride, mergo.WithOverrideEmptySlice}
+				appendSnippet = false
 				continue
 			case "Append":
 				opts = []func(*mergo.Config){mergo.WithOverride, mergo.WithAppendSlice}
+				appendSnippet = true
 				continue
 			}
 		}
@@ -867,15 +884,39 @@ func (b *HaproxyConfMgrImpl) mergeWithBackendCRs(backendRef gatewayv1.HTTPBacken
 			errs.Add(err)
 			continue
 		}
+		if lines := configSnippetLines(beCR.Spec.ConfigSnippet); len(lines) > 0 {
+			if appendSnippet {
+				configSnippet = append(configSnippet, lines...)
+			} else {
+				configSnippet = lines
+			}
+		}
 	}
 
 	// Finally, a Service-level Backend CR (gate.v3.haproxy.org/cr-backend) is
 	// applied last, by override, so it takes precedence over the route-level
 	// cr-backend result (service > httproute).
-	if err := b.mergeServiceBackendCR(newBackend, backendRef, namespace); err != nil {
+	serviceSnippet, err := b.mergeServiceBackendCR(newBackend, backendRef, namespace)
+	if err != nil {
 		errs.Add(err)
 	}
-	return errs
+	if len(serviceSnippet) > 0 {
+		configSnippet = serviceSnippet
+	}
+	return configSnippet, errs
+}
+
+// configSnippetLines splits the config_snippet of a Backend CR into lines,
+// without the blank ones.
+func configSnippetLines(snippet string) []string {
+	var lines []string
+	for line := range strings.SplitSeq(snippet, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
 }
 
 // mergeServiceBackendCR resolves the Backend CR named by the target Service's
@@ -883,16 +924,17 @@ func (b *HaproxyConfMgrImpl) mergeWithBackendCRs(backendRef gatewayv1.HTTPBacken
 // value is "name" or "namespace/name"; a cross-namespace reference is not yet
 // supported (it will require a ReferenceGrant) and is skipped with a log. A
 // missing or unresolved reference is logged and ignored so one bad annotation
-// cannot break the backend build.
-func (b *HaproxyConfMgrImpl) mergeServiceBackendCR(newBackend *models.Backend, backendRef gatewayv1.HTTPBackendRef, routeNamespace string) error {
+// cannot break the backend build. It returns the lines of the config snippet of
+// the CR, if any.
+func (b *HaproxyConfMgrImpl) mergeServiceBackendCR(newBackend *models.Backend, backendRef gatewayv1.HTTPBackendRef, routeNamespace string) ([]string, error) {
 	svcKey := tree.ServiceNsNameKey(routeNamespace, backendRef.BackendObjectReference)
 	service, ok := b.controllerStore.ClusterStore.Services[svcKey]
 	if !ok || service == nil {
-		return nil
+		return nil, nil
 	}
 	value := service.Annotations[constants.ServiceBackendCRAnnotation]
 	if value == "" {
-		return nil
+		return nil, nil
 	}
 
 	crNamespace := svcKey.Namespace
@@ -916,7 +958,7 @@ func (b *HaproxyConfMgrImpl) mergeServiceBackendCR(newBackend *models.Backend, b
 				slog.String("service", svcKey.String()),
 				slog.String("backendCR", crNamespace+"/"+crName),
 			)
-			return nil
+			return nil, nil
 		}
 	}
 
@@ -929,14 +971,17 @@ func (b *HaproxyConfMgrImpl) mergeServiceBackendCR(newBackend *models.Backend, b
 			slog.String("service", svcKey.String()),
 			slog.String("backendCR", crNamespace+"/"+crName),
 		)
-		return nil
+		return nil, nil
 	}
 
 	// Deep copy so blanking the name does not mutate the store object; override
 	// (no AppendSlice) so the Service CR replaces, not appends to, the route result.
 	cr := beCR.DeepCopy()
 	cr.Spec.BackendBase.Name = ""
-	return mergo.Merge(newBackend, &cr.Spec.Backend, mergo.WithOverride)
+	if err := mergo.Merge(newBackend, &cr.Spec.Backend, mergo.WithOverride); err != nil {
+		return nil, err
+	}
+	return configSnippetLines(cr.Spec.ConfigSnippet), nil
 }
 
 // resolveBackendCR resolves the Backend CR referenced by nsName. The reference
@@ -1307,14 +1352,14 @@ func (b *HaproxyConfMgrImpl) processBackendsUpsertedInCycle() utils.Errors {
 		}
 		namespace, isIngressBackend := b.backendOrigin(ownersForRoute, backendName)
 
-		be, err := b.newBackend(backendName, beMd, backendRef, ruleFilters, matchPrefix,
+		be, configSnippet, err := b.newBackend(backendName, beMd, backendRef, ruleFilters, matchPrefix,
 			sessionPersistence, httpTimeouts, namespace, isHTTPBackend, isIngressBackend)
 		if err != nil {
 			errs.Add(err)
 			continue
 		}
 
-		if err := b.configuration.upsertBackend(b.logger, be, nil); err != nil {
+		if err := b.configuration.upsertBackend(b.logger, be, configSnippet); err != nil {
 			errs.Add(err)
 			continue
 		}

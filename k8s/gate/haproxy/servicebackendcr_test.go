@@ -93,7 +93,7 @@ func TestMergeServiceBackendCR(t *testing.T) {
 		)
 		// newBackend simulates the route-level result: Mode already set to tcp.
 		be := &models.Backend{Mode: "tcp"}
-		if err := mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a"); err != nil {
+		if _, err := mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if be.Mode != "http" {
@@ -107,7 +107,7 @@ func TestMergeServiceBackendCR(t *testing.T) {
 			map[k8stypes.NamespacedName]*v3.Backend{crNN: tuningCR("", "leastconn")},
 		)
 		be := &models.Backend{Mode: "http", Abortonclose: "enabled"}
-		if err := mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a"); err != nil {
+		if _, err := mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if be.Abortonclose != "enabled" {
@@ -124,7 +124,7 @@ func TestMergeServiceBackendCR(t *testing.T) {
 			map[k8stypes.NamespacedName]*v3.Backend{crNN: tuningCR("http", "")},
 		)
 		be := &models.Backend{Mode: "tcp"}
-		_ = mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a")
+		_, _ = mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a")
 		if be.Mode != "http" {
 			t.Errorf("expected same-namespace ns/name to resolve, Mode=%q", be.Mode)
 		}
@@ -139,7 +139,7 @@ func TestMergeServiceBackendCR(t *testing.T) {
 		)
 		// No ReferenceGrantManager set (nil) => not permitted.
 		be := &models.Backend{Mode: "tcp"}
-		_ = mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a")
+		_, _ = mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a")
 		if be.Mode != "tcp" {
 			t.Errorf("expected cross-namespace to be skipped without a grant, Mode=%q", be.Mode)
 		}
@@ -156,7 +156,7 @@ func TestMergeServiceBackendCR(t *testing.T) {
 		mgr.controllerStore.ReferenceGrantManager = grantServiceToBackend("team-a", "shared")
 
 		be := &models.Backend{Mode: "tcp"}
-		if err := mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a"); err != nil {
+		if _, err := mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if be.Mode != "http" {
@@ -170,7 +170,7 @@ func TestMergeServiceBackendCR(t *testing.T) {
 			nil,
 		)
 		be := &models.Backend{Mode: "tcp"}
-		if err := mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a"); err != nil {
+		if _, err := mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if be.Mode != "tcp" {
@@ -184,7 +184,7 @@ func TestMergeServiceBackendCR(t *testing.T) {
 			nil,
 		)
 		be := &models.Backend{Mode: "tcp"}
-		if err := mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a"); err != nil {
+		if _, err := mgr.mergeServiceBackendCR(be, serviceHTTPBackendRef("echo"), "team-a"); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if be.Mode != "tcp" {

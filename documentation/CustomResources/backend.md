@@ -216,6 +216,36 @@ The Service-level CR is always merged **last**, so for any field it sets, the
 
 ---
 
+## Config snippet
+
+The `config_snippet` field carries raw lines of HAProxy configuration which are
+written into the backend, for the directives the other fields do not support,
+such as `filter-config` for a filter unknown to client-native:
+
+```yaml
+apiVersion: gate.v3.haproxy.org/v3
+kind: Backend
+metadata:
+  name: s3
+  namespace: default
+spec:
+  config_snippet: |
+    filter-config cloudauth enabled profile s3-key host s3.eu-west-1.amazonaws.com
+```
+
+A snippet allows **any** HAProxy configuration, so it is **ignored** (with a
+warning in the logs) unless HUG runs with `--enable-backend-config-snippets`.
+Only enable it when the users allowed to create `Backend` CRs are trusted with
+the HAProxy configuration.
+
+The snippets follow the merge rules of the list fields: with several route-level
+CRs they are appended in `Append` mode and replaced in `Override` mode, and the
+snippet of the Service-level CR replaces them. A CR without snippet leaves the
+current one unchanged. The configuration with the snippet is checked with
+`haproxy -c` like any other change, so an invalid snippet is rejected.
+
+---
+
 ## Backend identity
 
 HUG names each backend from `service + port + filter-hash`. The **route-level**
