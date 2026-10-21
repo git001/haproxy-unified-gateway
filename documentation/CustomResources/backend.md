@@ -244,6 +244,45 @@ snippet of the Service-level CR replaces them. A CR without snippet leaves the
 current one unchanged. The configuration with the snippet is checked with
 `haproxy -c` like any other change, so an invalid snippet is rejected.
 
+### Position in the backend
+
+The snippet is written after the `filter`, `compression` and `http-request`
+lines generated from the other fields, and before the `server`,
+`http-response` and `http-after-response` lines. Its `http-request` rules are
+therefore evaluated after the ones of the CR and of the route filters.
+
+### Filters
+
+HAProxy has two ways to declare filters, which cannot be mixed in the same
+proxy (`'filter' and 'filter-*' directives cannot be used together`):
+
+- the `filter_list` field of the CR writes `filter` lines;
+- some filters can only be declared with `filter-config`, for example the
+  filters registered as filter classes by an addon.
+
+The `compression` fields do not declare a filter line: they work with both.
+So a backend whose snippet uses `filter-config` must not use `filter_list`.
+
+With `filter-config`, the filters are evaluated in the order of their
+classes, not in the order of the lines, which `filter-sequence` can change.
+The `show filter classes` and `show filter instances <backend>` commands of
+the runtime API dump these orders.
+
+An instance cannot be declared twice in the same proxy. Several instances of
+the same class need distinct `id`s, which also applies when two CRs merged in
+`Append` mode carry the same line.
+
+Experimental directives require `expose-experimental-directives`, which is
+set with `expose_experimental_directives: true` in the `Global` CR: a line
+added to the `global` section of the base configuration is not kept.
+
+### Failures
+
+The changes of a synchronization are committed together, so a snippet that
+`haproxy -c` rejects makes the whole commit fail, not only its backend: none
+of the changes of that synchronization is applied. Check the snippets with
+`haproxy -c` before applying them.
+
 ---
 
 ## Backend identity
