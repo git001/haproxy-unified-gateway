@@ -263,6 +263,13 @@ spec:
                         type: string
                       type: array
                   type: object
+                config_snippet:
+                  description: |-
+                    ConfigSnippet holds raw lines of HAProxy configuration appended to the
+                    backend, for the directives the other fields do not support. It is only
+                    used when HUG runs with --enable-backend-config-snippets, since it allows
+                    any HAProxy configuration.
+                  type: string
                 connect_timeout:
                   description: |-
                     connect timeout
