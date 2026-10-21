@@ -25,7 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-func (c *clientNative) BackendCreate(backend models.Backend) error {
+func (c *clientNative) BackendCreate(backend models.Backend, configSnippet ConfigSnippet) error {
 	configuration, err := c.nativeAPI.Configuration()
 	if err != nil {
 		return err
@@ -33,12 +33,20 @@ func (c *clientNative) BackendCreate(backend models.Backend) error {
 	errCreate := configuration.CreateStructuredBackend(&backend, c.activeTransaction, 0)
 	if errCreate != nil {
 		// ... maybe it's already existing, so just edit it.
-		if err := configuration.EditStructuredBackend(backend.Name, &backend, c.activeTransaction, 0); err != nil {
+		if _, err := c.editBackend(configuration, backend, configSnippet); err != nil {
 			c.logger.LogAttrs(
 				context.Background(), slog.LevelError, "failed to edit backend",
 				logging.LogAttrError(err),
 				slog.String("backend", backend.Name),
 			)
+			return err
+		}
+	} else if configSnippet.Set && len(configSnippet.Lines) > 0 {
+		p, err := configuration.GetParser(c.activeTransaction)
+		if err != nil {
+			return err
+		}
+		if err := setBackendConfigSnippet(p, backend.Name, configSnippet.Lines); err != nil {
 			return err
 		}
 	}
@@ -79,7 +87,7 @@ func (c *clientNative) BackendGet(backendName string) (models.Backend, error) {
 	return *backend, err
 }
 
-func (c *clientNative) BackendEdit(backend models.Backend) error {
+func (c *clientNative) BackendEdit(backend models.Backend, configSnippet ConfigSnippet) error {
 	configuration, err := c.nativeAPI.Configuration()
 	if err != nil {
 		return err
@@ -103,13 +111,17 @@ func (c *clientNative) BackendEdit(backend models.Backend) error {
 		slog.Bool("onlyServersUpdated", onlyServersUpdated),
 	)
 
-	if err := configuration.EditStructuredBackend(backend.Name, &backend, c.activeTransaction, 0); err != nil {
+	snippetChanged, err := c.editBackend(configuration, backend, configSnippet)
+	if err != nil {
 		c.logger.LogAttrs(
 			context.Background(), slog.LevelError, "Failed to edit backend",
 			logging.LogAttrError(err),
 			slog.String("backend", backend.Name),
 		)
 		return err
+	}
+	if snippetChanged {
+		reload.Instance().SetReload("Backend config snippet updated %s", backend.Name)
 	}
 
 	// Servers only updated

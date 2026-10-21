@@ -212,7 +212,7 @@ func (h *AppManagerImpl) processCreate(created structured.Structured, mergeState
 			continue
 		}
 
-		err := h.client.BackendCreate(*createdBE)
+		err := h.client.BackendCreate(*createdBE, api.ConfigSnippet{})
 		if err != nil {
 			h.logger.LogAttrs(
 				context.Background(), slog.LevelError, "failed to create backend",
@@ -341,7 +341,7 @@ func (h *AppManagerImpl) processUpdate(updated structured.Structured, mergeStrat
 		// TODO: need to check if only the Metadata has changed
 		// If so, no need to reload
 
-		err := h.client.BackendEdit(*updatedBE)
+		err := h.client.BackendEdit(*updatedBE, api.ConfigSnippet{})
 		if err != nil {
 			h.logger.LogAttrs(
 				context.Background(), slog.LevelError, "failed to edit backend",

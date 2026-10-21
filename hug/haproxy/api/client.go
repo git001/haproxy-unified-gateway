@@ -62,11 +62,11 @@ type Bind interface {
 }
 
 type Backend interface {
-	BackendCreate(frontend models.Backend) error
+	BackendCreate(backend models.Backend, configSnippet ConfigSnippet) error
 	BackendDelete(backendName string) error
 	BackendsGet() (models.Backends, error)
 	BackendGet(backendName string) (models.Backend, error)
-	BackendEdit(backend models.Backend) error
+	BackendEdit(backend models.Backend, configSnippet ConfigSnippet) error
 }
 
 type Global interface {
